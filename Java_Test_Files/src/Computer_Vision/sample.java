@@ -9,14 +9,14 @@ import org.apache.http.client.utils.URIBuilder;
 import org.apache.http.entity.InputStreamEntity;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
-import java.nio.file.Files;
 import java.io.ByteArrayInputStream;
-import java.io.File;
 import java.io.InputStream;
+import org.json.simple.JSONObject;
+import org.json.simple.JSONValue;
 
 public class sample 
 {
-    public static void main(String[] args) 
+    public static JSONObject get_objects(byte[] image) 
     {
         HttpClient httpclient = HttpClients.createDefault();
 
@@ -24,15 +24,12 @@ public class sample
         {
             URIBuilder builder = new URIBuilder("https://api.projectoxford.ai/vision/v1.0/analyze");
 
-
             URI uri = builder.build();
             HttpPost request = new HttpPost(uri);
             request.setHeader("Content-Type", "application/octet-stream");
             request.setHeader("Ocp-Apim-Subscription-Key", "a8e94b0447b54941b0b5edf708503114");
 
-            File fi = new File("/Users/arjit/Downloads/cat.jpg");
-            byte[] fileContent = Files.readAllBytes(fi.toPath());
-            InputStream myInputStream = new ByteArrayInputStream(fileContent); 
+            InputStream myInputStream = new ByteArrayInputStream(image); 
             // Request body
             InputStreamEntity reqEntity = new InputStreamEntity(myInputStream);
             request.setEntity(reqEntity);
@@ -42,12 +39,16 @@ public class sample
 
             if (entity != null) 
             {
-                System.out.println(EntityUtils.toString(entity));
+            	JSONObject result = (JSONObject) JSONValue.parse(EntityUtils.toString(entity));
+                return result;
             }
+            
+            return null;
         }
         catch (Exception e)
         {
             System.out.println(e.getMessage());
+            return null;
         }
     }
 }
