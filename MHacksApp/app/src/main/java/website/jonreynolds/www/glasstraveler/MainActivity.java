@@ -1,5 +1,6 @@
 package website.jonreynolds.www.glasstraveler;
 
+import com.google.android.glass.content.Intents;
 import com.google.android.glass.media.Sounds;
 import com.google.android.glass.widget.CardBuilder;
 import com.google.android.glass.widget.CardScrollAdapter;
@@ -7,11 +8,22 @@ import com.google.android.glass.widget.CardScrollView;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.drawable.Drawable;
 import android.media.AudioManager;
 import android.os.Bundle;
+import android.os.Environment;
+import android.os.FileObserver;
+import android.provider.MediaStore;
+import android.util.Log;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
+
+import java.io.File;
 
 /**
  * An {@link Activity} showing a tuggable "Hello World!" card.
@@ -100,4 +112,109 @@ public class MainActivity extends Activity {
         return card.getView();
     }
 
+    private static final int TAKE_PICTURE_REQUEST = 1;
+
+    /*
+     * Takes a pic
+     */
+    private void takePicture() {
+        Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+        startActivityForResult(intent, TAKE_PICTURE_REQUEST);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == TAKE_PICTURE_REQUEST && resultCode == RESULT_OK) {
+            String thumbnailPath = data.getStringExtra(Intents.EXTRA_THUMBNAIL_FILE_PATH);
+            String picturePath = data.getStringExtra(Intents.EXTRA_PICTURE_FILE_PATH);
+
+            BitmapFactory.Options bmOptions = new BitmapFactory.Options();
+            Bitmap bitmap = BitmapFactory.decodeFile(thumbnailPath,bmOptions);
+            int width = bitmap.getWidth();
+            int height = bitmap.getHeight();
+            mView = buildImageView(bitmap);
+            setContentView(mView);
+
+            processPictureWhenReady(picturePath, width, height);
+            // TODO: Show the thumbnail to the user while the full picture is being
+            // processed.
+        }
+
+        super.onActivityResult(requestCode, resultCode, data);
+    }
+
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_CAMERA) {
+            // Stop the preview and release the camera.
+            // Execute your logic as quickly as possible
+            // so the capture happens quickly.
+            takePicture();
+            return false;
+        } else {
+            return super.onKeyDown(keyCode, event);
+        }
+    }
+
+    private void processPictureWhenReady(final String picturePath, final int w, final int h) {
+        final File pictureFile = new File(picturePath);
+
+        if (pictureFile.exists()) {
+            // The picture is ready; process it.
+            BitmapFactory.Options bmOptions = new BitmapFactory.Options();
+            Bitmap bitmap = BitmapFactory.decodeFile(pictureFile.getAbsolutePath(),bmOptions);
+            bitmap = Bitmap.createScaledBitmap(bitmap, w, h, false);
+            mView = buildImageView(bitmap);
+            setContentView(mView);
+            Log.d("NICK", w+", "+h);
+        } else {
+            // The file does not exist yet. Before starting the file observer, you
+            // can update your UI to let the user know that the application is
+            // waiting for the picture (for example, by displaying the thumbnail
+            // image and a progress indicator).
+
+            final File parentDirectory = pictureFile.getParentFile();
+            FileObserver observer = new FileObserver(parentDirectory.getPath(),
+                    FileObserver.CLOSE_WRITE | FileObserver.MOVED_TO) {
+                // Protect against additional pending events after CLOSE_WRITE
+                // or MOVED_TO is handled.
+                private boolean isFileWritten;
+
+                @Override
+                public void onEvent(int event, String path) {
+                    if (!isFileWritten) {
+                        // For safety, make sure that the file that was created in
+                        // the directory is actually the one that we're expecting.
+                        File affectedFile = new File(parentDirectory, path);
+                        isFileWritten = affectedFile.equals(pictureFile);
+
+                        if (isFileWritten) {
+                            stopWatching();
+
+                            // Now that the file is ready, recursively call
+                            // processPictureWhenReady again (on the UI thread).
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    processPictureWhenReady(picturePath, w , h);
+                                }
+                            });
+                        }
+                    }
+                }
+            };
+            observer.startWatching();
+        }
+
+
 }
+
+        private View buildImageView(Bitmap bmp) {
+            return new CardBuilder(this, CardBuilder.Layout.CAPTION)
+                    .addImage(bmp)
+                    .setText("Couchie Crew √√")
+                    .setFootnote("We r couches..")
+                    .setTimestamp("rrrrrrr")
+                    .getView();
+        }
+    }
