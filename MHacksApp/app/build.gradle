@@ -10,6 +10,35 @@ repositories {
 android {
     compileSdkVersion "Google Inc.:Glass Development Kit Preview:19"
     buildToolsVersion "23.0.2"
+
+    productFlavors {
+        x86 {
+            ndk {
+                abiFilter "x86"
+            }
+        }
+        arm {
+            ndk {
+                abiFilters "armeabi"
+            }
+        }
+    }
+
+    sourceSets {
+        main {
+            manifest.srcFile 'AndroidManifest.xml'
+            java.srcDirs = ['src']
+            resources.srcDirs = ['src']
+            aidl.srcDirs = ['src']
+            renderscript.srcDirs = ['src']
+            res.srcDirs = ['res']
+            assets.srcDirs = ['assets']
+            jniLibs.srcDir '../SpeechSDK/libs'
+        }
+
+    debug.setRoot('build-types/debug')
+    release.setRoot('build-types/release')
+    }
     defaultConfig {
         applicationId "website.jonreynolds.www.glasstraveler"
         minSdkVersion 19
@@ -28,6 +57,6 @@ android {
 dependencies {
     compile fileTree(include: ['*.jar'], dir: 'libs')
     compile 'com.microsoft.projectoxford:vision:1.0.354'
-    compile 'com.microsoft.projectoxford:speechrecognition:1.1.0'
     compile 'com.memetix:microsoft-translator-java-api:0.6.2'
+    compile 'com.microsoft.projectoxford:speechrecognition:1.1.0'
 }

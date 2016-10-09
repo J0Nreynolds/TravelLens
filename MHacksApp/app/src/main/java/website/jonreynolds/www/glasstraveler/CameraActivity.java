@@ -2,7 +2,9 @@ package website.jonreynolds.www.glasstraveler;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.res.ColorStateList;
 import android.graphics.Bitmap;
+import android.graphics.Color;
 import android.hardware.Camera;
 import android.os.AsyncTask;
 import android.os.Bundle;
@@ -11,12 +13,15 @@ import android.renderscript.Element;
 import android.renderscript.RenderScript;
 import android.renderscript.ScriptIntrinsicYuvToRGB;
 import android.renderscript.Type;
+import android.text.Layout;
 import android.util.Log;
+import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.speech.tts.TextToSpeech;
+import android.widget.TextView;
 
 import com.memetix.mst.language.Language;
 import com.memetix.mst.translate.Translate;
@@ -25,6 +30,14 @@ import com.google.android.glass.touchpad.Gesture;
 import com.google.android.glass.touchpad.GestureDetector;
 import com.google.android.glass.widget.CardBuilder;
 import com.google.gson.Gson;
+import com.microsoft.bing.speech.SpeechClientStatus;
+import com.microsoft.cognitiveservices.speechrecognition.DataRecognitionClient;
+import com.microsoft.cognitiveservices.speechrecognition.ISpeechRecognitionServerEvents;
+import com.microsoft.cognitiveservices.speechrecognition.MicrophoneRecognitionClient;
+import com.microsoft.cognitiveservices.speechrecognition.RecognitionResult;
+import com.microsoft.cognitiveservices.speechrecognition.RecognitionStatus;
+import com.microsoft.cognitiveservices.speechrecognition.SpeechRecognitionMode;
+import com.microsoft.cognitiveservices.speechrecognition.SpeechRecognitionServiceFactory;
 import com.microsoft.projectoxford.vision.VisionServiceClient;
 import com.microsoft.projectoxford.vision.VisionServiceRestClient;
 import com.microsoft.projectoxford.vision.contract.LanguageCodes;
@@ -37,25 +50,38 @@ import com.microsoft.projectoxford.vision.rest.VisionServiceException;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.TimeUnit;
 
 import static android.content.ContentValues.TAG;
 
 
-public class CameraActivity extends Activity implements TextToSpeech.OnInitListener {
+public class CameraActivity extends Activity implements TextToSpeech.OnInitListener, ISpeechRecognitionServerEvents {
 
     private Camera mCamera;
     private CameraPreview mPreview;
     private FrameLayout preview;
+    private TextView captions;
     private ImageView screenshot;
     private Bitmap screenshotBitmap;
     private View translate;
     private String queuedText;
 
+
+    int m_waitSeconds = 0;
+    DataRecognitionClient dataClient = null;
+    MicrophoneRecognitionClient micClient = null;
+    FinalResponseStatus isReceivedResponse = FinalResponseStatus.NotReceived;
+
+    public enum FinalResponseStatus { NotReceived, OK, Timeout }
+
+
     private GestureDetector mGestureDetector;
     private boolean translatePic = false;
     private boolean showingPic = false;
+    private boolean recording = false;
     private boolean initialized = false;
     private TextToSpeech tts;
 
@@ -104,6 +130,14 @@ public class CameraActivity extends Activity implements TextToSpeech.OnInitListe
         // Create our Preview view and set it as the content of our activity.
         mPreview = new CameraPreview(this, mCamera, cb);
         preview = (FrameLayout) findViewById(R.id.camera_preview);
+        captions = new TextView(this);
+        captions.setGravity(Gravity.BOTTOM);
+        captions.setAllCaps(true);
+        captions.setTextColor(Color.YELLOW);
+        captions.setTextSize(20);
+        captions.setPadding(10,0,10,0);
+        captions.setTextAlignment(View.TEXT_ALIGNMENT_CENTER);
+        captions.setHeight(150);
         preview.addView(mPreview);
         mGestureDetector = createGestureDetector(this);
 
@@ -133,16 +167,29 @@ public class CameraActivity extends Activity implements TextToSpeech.OnInitListe
             @Override
             public boolean onGesture(Gesture gesture) {
                 if (gesture == Gesture.TAP){
-                    if(!translatePic) {
-                        translatePic = true;
-                    }
-                    if(showingPic) {
-                        endTranslation();
-                        showingPic = false;
-                        translatePic  = false;
+                    if (!recording) {
+                        if (!translatePic) {
+                            translatePic = true;
+                        }
+                        if (showingPic) {
+                            endTranslation();
+                            showingPic = false;
+                            translatePic = false;
+                        }
                     }
                     return true;
-                } else if (gesture == Gesture.TWO_TAP) {
+                } else if (gesture == Gesture.SWIPE_RIGHT) {
+                    if(!showingPic){
+                        if(!recording){
+                            captions.setText("");
+                            startRecording();
+                            recording = true;
+                        }
+                        else{
+                            recording=false;
+                            preview.removeView(captions);
+                        }
+                    }
                     // do something on two finger tap
                     return true;
                 } else if (gesture == Gesture.SWIPE_RIGHT) {
@@ -358,11 +405,159 @@ public class CameraActivity extends Activity implements TextToSpeech.OnInitListe
             if(text == null){
                 text = "Error: Failed to detect language.";
             }
-            preview.removeView(screenshot);
-            CardBuilder cb = new CardBuilder(getBaseContext(), CardBuilder.Layout.CAPTION).setText(text).addImage(screenshotBitmap);
-            translate = cb.getView();
-            preview.addView(translate);
+            if(recording){
+                captions.setText(text);
+            }
+            else {
+                preview.removeView(screenshot);
+                CardBuilder cb = new CardBuilder(getBaseContext(), CardBuilder.Layout.TITLE).setText(text).addImage(screenshotBitmap);
+                translate = cb.getView();
+                preview.addView(translate);
+            }
         }
     }
+    /**
+     * Gets the current speech recognition mode.
+     * @return The speech recognition mode.
+     */
+    private SpeechRecognitionMode getMode() {
+        return SpeechRecognitionMode.ShortPhrase;
+    }
+
+
+    private String getPrimaryKey(){
+        return "11c946548a66499c94301f81ee52e72f";
+    }
+
+    /**
+     * Handles the double tap event for audio speech recognition
+     */
+    private void startRecording() {
+        this.m_waitSeconds = 20;
+        if (this.micClient == null) {
+                this.micClient = SpeechRecognitionServiceFactory.createMicrophoneClient(
+                        this,
+                        this.getMode(),
+                        "fr-FR",
+                        this,
+                        this.getPrimaryKey());
+        }
+        preview.addView(captions);
+        this.micClient.startMicAndRecognition();
+
+    }
+
+
+    @Override
+    public void onPartialResponseReceived(String s) {
+        captions.setText(s);
+    }
+
+    @Override
+    public void onIntentReceived(final String payload) {
+    }
+
+    @Override
+    public void onError(final int errorCode, String response) {
+        String error = "Error code: " + SpeechClientStatus.fromInt(errorCode) + " " + errorCode;
+        error += "\nError text: " + response;
+        captions.setText(error);
+    }
+
+    private void SendAudioHelper(String filename) {
+        RecognitionTask doDataReco = new RecognitionTask(this.dataClient, this.getMode(), filename);
+        try
+        {
+            doDataReco.execute().get(m_waitSeconds, TimeUnit.SECONDS);
+        }
+        catch (Exception e)
+        {
+            doDataReco.cancel(true);
+            isReceivedResponse = FinalResponseStatus.Timeout;
+        }
+    }
+
+    @Override
+    public void onFinalResponseReceived(final RecognitionResult response) {
+        new translateRequest().execute(captions.getText().toString(), LanguageCodes.French);
+        boolean isFinalDicationMessage = this.getMode() == SpeechRecognitionMode.LongDictation &&
+                (response.RecognitionStatus == RecognitionStatus.EndOfDictation ||
+                        response.RecognitionStatus == RecognitionStatus.DictationEndSilenceTimeout);
+
+        this.micClient.endMicAndRecognition();
+
+        if (isFinalDicationMessage) {
+            this.isReceivedResponse = FinalResponseStatus.OK;
+        }
+    }
+
+    /**
+     * Called when the microphone status has changed.
+     * @param recording The current recording state
+     */
+    @Override
+    public void onAudioEvent(boolean recording) {
+        if (recording) {
+        }
+        if (!recording) {
+            this.micClient.endMicAndRecognition();
+        }
+    }
+
+    /*
+   * Speech recognition with data (for example from a file or audio source).
+   * The data is broken up into buffers and each buffer is sent to the Speech Recognition Service.
+   * No modification is done to the buffers, so the user can apply their
+   * own VAD (Voice Activation Detection) or Silence Detection
+   *
+   * @param dataClient
+   * @param recoMode
+   * @param filename
+   */
+    private class RecognitionTask extends AsyncTask<Void, Void, Void> {
+        DataRecognitionClient dataClient;
+        SpeechRecognitionMode recoMode;
+        String filename;
+
+        RecognitionTask(DataRecognitionClient dataClient, SpeechRecognitionMode recoMode, String filename) {
+            this.dataClient = dataClient;
+            this.recoMode = recoMode;
+            this.filename = filename;
+        }
+
+        @Override
+        protected Void doInBackground(Void... params) {
+            try {
+                // Note for wave files, we can just send data from the file right to the server.
+                // In the case you are not an audio file in wave format, and instead you have just
+                // raw data (for example audio coming over bluetooth), then before sending up any
+                // audio data, you must first send up an SpeechAudioFormat descriptor to describe
+                // the layout and format of your raw audio data via DataRecognitionClient's sendAudioFormat() method.
+                // String filename = recoMode == SpeechRecognitionMode.ShortPhrase ? "whatstheweatherlike.wav" : "batman.wav";
+                InputStream fileStream = getAssets().open(filename);
+                int bytesRead = 0;
+                byte[] buffer = new byte[1024];
+
+                do {
+                    // Get  Audio data to send into byte buffer.
+                    bytesRead = fileStream.read(buffer);
+
+                    if (bytesRead > -1) {
+                        // Send of audio data to service.
+                        dataClient.sendAudio(buffer, bytesRead);
+                    }
+                } while (bytesRead > 0);
+
+            } catch (Throwable throwable) {
+                throwable.printStackTrace();
+            }
+            finally {
+                dataClient.endAudio();
+            }
+
+            return null;
+        }
+    }
+
 }
 
