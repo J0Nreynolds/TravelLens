@@ -37,22 +37,25 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.List;
+import java.util.Locale;
 
 import static android.content.ContentValues.TAG;
 
 
-public class CameraActivity extends Activity {
+public class CameraActivity extends Activity implements TextToSpeech.OnInitListener {
 
     private Camera mCamera;
     private CameraPreview mPreview;
-    FrameLayout preview;
-    ImageView screenshot;
-    Bitmap screenshotBitmap;
+    private FrameLayout preview;
+    private ImageView screenshot;
+    private Bitmap screenshotBitmap;
+    private String queuedText;
 
     private GestureDetector mGestureDetector;
     private boolean translatePic = false;
     private boolean showingPic = false;
-    private boolean translateAudio = false;
+    private boolean initialized = false;
+    private TextToSpeech tts;
 
     private VisionServiceClient client;
 
@@ -63,6 +66,7 @@ public class CameraActivity extends Activity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
 
+        tts = new TextToSpeech(this /* context */, this /* listener */);
 
         if (client==null){
             client = new VisionServiceRestClient(getString(R.string.subscription_key));
@@ -260,6 +264,28 @@ public class CameraActivity extends Activity {
         return translated;
     }
 
+    @Override
+    public void onInit(int status) {
+        if (status == TextToSpeech.SUCCESS) {
+            initialized = true;
+        }
+    }
+
+    public void speak(String text, Locale language) {
+        // If not yet initialized, queue up the text.
+        if (!initialized) {
+            queuedText = text;
+            return;
+        }
+        queuedText = null;
+        // Before speaking the current text, stop any ongoing speech.
+        tts.stop();
+        // Set the language.
+        tts.setLanguage(language);
+        // Speak the text.
+        tts.speak(text, TextToSpeech.QUEUE_FLUSH, null);
+    }
+
     private class doRequest extends AsyncTask<byte[], String , String> {
         // Store error message
         private Exception e = null;
@@ -300,51 +326,9 @@ public class CameraActivity extends Activity {
                 }
                 language = r.language;
             }
-
-            TTSTestActivity.speak(text, language);
+            Locale lang = new Locale(language);
+            CameraActivity.this.speak(text, lang);
             new translateRequest().execute(text, language);
-        }
-    }
-
-    public class TTSTestActivity extends Activity implements TextToSpeech.OnInitListener {
-
-        private TextToSpeech tts;
-        private boolean initialized = false;
-        private String queuedText;
-
-        @Override
-        protected void onCreate(Bundle savedInstanceState) {
-            super.onCreate(savedInstanceState);
-            TextView view = new TextView(this);
-            view.setText("Tap Me");
-            setContentView(view);
-            tts = new TextToSpeech(this /* context */, this /* listener */);
-        }
-
-        @Override
-        public void onInit(int status) {
-            if (status == TextToSpeech.SUCCESS) {
-                initialized = true;
-
-                if (queuedText != null) {
-                    speak(queuedText);
-                }
-            }
-        }
-
-        public void speak(String text, String language) {
-            // If not yet initialized, queue up the text.
-            if (!initialized) {
-                queuedText = text;
-                return;
-            }
-            queuedText = null;
-            // Before speaking the current text, stop any ongoing speech.
-            tts.stop();
-            // Set the language.
-            tts.setLanguage(language);
-            // Speak the text.
-            tts.speak(text, TextToSpeech.QUEUE_FLUSH, null);
         }
     }
 
