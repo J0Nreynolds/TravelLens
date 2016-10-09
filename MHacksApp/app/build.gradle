@@ -29,4 +29,5 @@ dependencies {
     compile fileTree(include: ['*.jar'], dir: 'libs')
     compile 'com.microsoft.projectoxford:vision:1.0.354'
     compile 'com.microsoft.projectoxford:speechrecognition:1.1.0'
+    compile 'com.memetix:microsoft-translator-java-api:0.6.2'
 }

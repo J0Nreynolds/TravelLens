@@ -2,4 +2,5 @@
     <string name="app_name">GlassTraveler</string>
     <string name="title_activity_main">Hello World Immersion</string>
     <string name="hello_world">Hello world!</string>
+    <string name="subscription_key">a8e94b0447b54941b0b5edf708503114</string>
 </resources>

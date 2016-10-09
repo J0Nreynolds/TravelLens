@@ -14,10 +14,12 @@ import static android.content.ContentValues.TAG;
 public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback {
     private SurfaceHolder mHolder;
     private Camera mCamera;
+    private Camera.PreviewCallback callback;
 
-    public CameraPreview(Context context, Camera camera) {
+    public CameraPreview(Context context, Camera camera, Camera.PreviewCallback cb) {
         super(context);
         mCamera = camera;
+        callback = cb;
 
         // Install a SurfaceHolder.Callback so we get notified when the
         // underlying surface is created and destroyed.
@@ -63,6 +65,7 @@ public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback
         // start preview with new settings
         try {
             mCamera.setPreviewDisplay(mHolder);
+            mCamera.setPreviewCallback(callback);
             mCamera.startPreview();
 
         } catch (Exception e){
