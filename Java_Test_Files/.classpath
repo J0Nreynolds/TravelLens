@@ -18,5 +18,6 @@
 	<classpathentry kind="lib" path="/Users/arjit/Downloads/httpcomponents-client-4.5.2/lib/commons-codec-1.9.jar"/>
 	<classpathentry kind="lib" path="/Users/arjit/Downloads/httpcomponents-client-4.5.2/lib/commons-logging-1.2.jar"/>
 	<classpathentry kind="lib" path="/Users/arjit/Downloads/json-simple-1.1.1.jar"/>
+	<classpathentry kind="lib" path="/Users/arjit/Downloads/microsoft-translator-java-api-0.6.2-jar-with-dependencies.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
