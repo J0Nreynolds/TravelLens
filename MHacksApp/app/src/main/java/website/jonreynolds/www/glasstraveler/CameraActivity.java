@@ -15,6 +15,7 @@ import android.util.Log;
 import android.view.MotionEvent;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
+import android.speech.tts.TextToSpeech;
 
 import com.memetix.mst.language.Language;
 import com.memetix.mst.translate.Translate;
@@ -299,7 +300,51 @@ public class CameraActivity extends Activity {
                 }
                 language = r.language;
             }
+
+            TTSTestActivity.speak(text, language);
             new translateRequest().execute(text, language);
+        }
+    }
+
+    public class TTSTestActivity extends Activity implements TextToSpeech.OnInitListener {
+
+        private TextToSpeech tts;
+        private boolean initialized = false;
+        private String queuedText;
+
+        @Override
+        protected void onCreate(Bundle savedInstanceState) {
+            super.onCreate(savedInstanceState);
+            TextView view = new TextView(this);
+            view.setText("Tap Me");
+            setContentView(view);
+            tts = new TextToSpeech(this /* context */, this /* listener */);
+        }
+
+        @Override
+        public void onInit(int status) {
+            if (status == TextToSpeech.SUCCESS) {
+                initialized = true;
+
+                if (queuedText != null) {
+                    speak(queuedText);
+                }
+            }
+        }
+
+        public void speak(String text, String language) {
+            // If not yet initialized, queue up the text.
+            if (!initialized) {
+                queuedText = text;
+                return;
+            }
+            queuedText = null;
+            // Before speaking the current text, stop any ongoing speech.
+            tts.stop();
+            // Set the language.
+            tts.setLanguage(language);
+            // Speak the text.
+            tts.speak(text, TextToSpeech.QUEUE_FLUSH, null);
         }
     }
 

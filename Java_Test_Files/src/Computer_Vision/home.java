@@ -10,6 +10,7 @@ import org.json.simple.JSONObject;
 public class home {
 
 	public static void main(String[] args) throws Exception {
+		long startTime = System.currentTimeMillis();
 		// TODO: Retrieve images from Glass
 		File fi = new File("/Users/arjit/Downloads/4signs.jpg");
 		byte[] fileContent = Files.readAllBytes(fi.toPath());
@@ -24,6 +25,10 @@ public class home {
         	JSONObject text_dict = ocr.get_text(fileContent);
         	translated_dict = helper.add_translations(text_dict);
         }
+        
+        long endTime   = System.currentTimeMillis();
+        long totalTime = endTime - startTime;
+        System.out.println(totalTime);
         
         System.out.println(translated_dict);
 	}
