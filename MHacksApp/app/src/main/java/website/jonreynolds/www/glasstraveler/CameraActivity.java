@@ -13,6 +13,7 @@ import android.renderscript.ScriptIntrinsicYuvToRGB;
 import android.renderscript.Type;
 import android.util.Log;
 import android.view.MotionEvent;
+import android.view.View;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.speech.tts.TextToSpeech;
@@ -49,6 +50,7 @@ public class CameraActivity extends Activity implements TextToSpeech.OnInitListe
     private FrameLayout preview;
     private ImageView screenshot;
     private Bitmap screenshotBitmap;
+    private View translate;
     private String queuedText;
 
     private GestureDetector mGestureDetector;
@@ -157,7 +159,7 @@ public class CameraActivity extends Activity implements TextToSpeech.OnInitListe
     }
 
     private void endTranslation() {
-        preview.removeView(screenshot);
+        preview.removeView(translate);
         preview.addView(mPreview);
 
     }
@@ -350,9 +352,16 @@ public class CameraActivity extends Activity implements TextToSpeech.OnInitListe
         @Override
         protected void onPostExecute(String text) {
             super.onPostExecute(text);
+            if(e != null){
+                text = e.getMessage();
+            }
+            if(text == null){
+                text = "Error: Failed to detect language.";
+            }
             preview.removeView(screenshot);
             CardBuilder cb = new CardBuilder(getBaseContext(), CardBuilder.Layout.CAPTION).setText(text).addImage(screenshotBitmap);
-            preview.addView(cb.getView());
+            translate = cb.getView();
+            preview.addView(translate);
         }
     }
 }
